@@ -9,6 +9,7 @@ type Memory = {
   country: string | null;
   message: string;
   photo_url: string | null;
+  visibility: "public" | "private";
   created_at: string;
 };
 
@@ -21,6 +22,8 @@ type MemoryComment = {
 };
 
 export default function HomePage() {
+  const PRIVATE_ACCESS_CODE = "FH-ASTANA-2026";
+
   const [memories, setMemories] = useState<Memory[]>([]);
   const [comments, setComments] = useState<Record<string, MemoryComment[]>>(
     {}
@@ -30,9 +33,15 @@ export default function HomePage() {
   const [country, setCountry] = useState("");
   const [message, setMessage] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
+
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [fileInputKey, setFileInputKey] = useState(0);
+
+  const [privateCode, setPrivateCode] = useState("");
+  const [privateAccess, setPrivateAccess] = useState(false);
+  const [privateNotice, setPrivateNotice] = useState("");
 
   const [commentNames, setCommentNames] = useState<Record<string, string>>({});
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
@@ -85,15 +94,51 @@ export default function HomePage() {
       return;
     }
 
-    const loadedMemories = data || [];
-    setMemories(loadedMemories);
+    const loadedMemories = (data || []) as Memory[];
 
-    await loadComments(loadedMemories.map((memory) => memory.id));
+    const visibleMemories = privateAccess
+      ? loadedMemories
+      : loadedMemories.filter((memory) => memory.visibility !== "private");
+
+    setMemories(visibleMemories);
+
+    await loadComments(visibleMemories.map((memory) => memory.id));
   }
 
   useEffect(() => {
-    loadMemories();
+    const savedPrivateAccess =
+      typeof window !== "undefined" &&
+      localStorage.getItem("friendsHostelPrivateAccess") === "true";
+
+    if (savedPrivateAccess) {
+      setPrivateAccess(true);
+      setPrivateNotice("Private memories are unlocked on this device.");
+    }
   }, []);
+
+  useEffect(() => {
+    loadMemories();
+  }, [privateAccess]);
+
+  function handlePrivateUnlock() {
+    const normalizedCode = privateCode.trim().toUpperCase();
+
+    if (normalizedCode === PRIVATE_ACCESS_CODE) {
+      localStorage.setItem("friendsHostelPrivateAccess", "true");
+      setPrivateAccess(true);
+      setPrivateCode("");
+      setPrivateNotice("Private memories unlocked.");
+      return;
+    }
+
+    setPrivateNotice("Incorrect private memory code.");
+  }
+
+  function handlePrivateLock() {
+    localStorage.removeItem("friendsHostelPrivateAccess");
+    setPrivateAccess(false);
+    setPrivateNotice("Private memories are hidden on this device.");
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -158,6 +203,7 @@ export default function HomePage() {
         country: country.trim() || null,
         message: message.trim(),
         photo_url: photoUrl,
+        visibility,
         status: "approved",
       });
 
@@ -169,11 +215,16 @@ export default function HomePage() {
       setCountry("");
       setMessage("");
       setPhoto(null);
+      setVisibility("public");
       setFileInputKey((prev) => prev + 1);
 
       await loadMemories();
 
-      setNotice("Thank you. Your memory has been shared on the wall.");
+      setNotice(
+        visibility === "private"
+          ? "Thank you. Your private memory has been saved. Enter the private code to view private memories."
+          : "Thank you. Your memory has been shared on the wall."
+      );
     } catch (error) {
       console.error("Submit memory error:", error);
       setNotice("Something went wrong. Please try again.");
@@ -297,6 +348,46 @@ export default function HomePage() {
           <p className="mx-auto mt-4 max-w-2xl text-[#6e6258]">
             Every photo here tells a small story from Friends Hostel.
           </p>
+
+          <div className="mx-auto mt-8 max-w-xl rounded-[1.5rem] border border-[#ded2c6] bg-white/60 p-4">
+            {privateAccess ? (
+              <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                <p className="text-sm font-semibold text-[#6e6258]">
+                  Private memories are unlocked on this device.
+                </p>
+
+                <button
+                  onClick={handlePrivateLock}
+                  className="rounded-full border border-[#ded2c6] bg-white/70 px-4 py-2 text-xs font-bold text-[#6e6258] transition hover:border-[#9c7a4f] hover:text-[#1f1b16]"
+                  type="button"
+                >
+                  Hide private memories
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <input
+                  value={privateCode}
+                  onChange={(e) => setPrivateCode(e.target.value)}
+                  className="min-w-0 flex-1 rounded-full border border-[#ded2c6] bg-white px-4 py-2 text-sm outline-none focus:border-[#9c7a4f]"
+                  placeholder="Enter private memory code"
+                  type="text"
+                />
+
+                <button
+                  onClick={handlePrivateUnlock}
+                  className="rounded-full bg-[#1f1b16] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#8a642f]"
+                  type="button"
+                >
+                  Unlock
+                </button>
+              </div>
+            )}
+
+            {privateNotice && (
+              <p className="mt-3 text-sm text-[#8b7d70]">{privateNotice}</p>
+            )}
+          </div>
         </div>
 
         {memories.length === 0 ? (
@@ -327,6 +418,12 @@ export default function HomePage() {
                     <div className="absolute left-8 top-0 h-6 w-4 rounded-b-full border border-[#b99c7a]/60 bg-[#f7f1ea] shadow-sm" />
                     <div className="absolute right-8 top-0 h-6 w-4 rounded-b-full border border-[#b99c7a]/60 bg-[#f7f1ea] shadow-sm" />
                   </div>
+
+                  {memory.visibility === "private" && (
+                    <div className="mb-3 inline-flex rounded-full bg-[#1f1b16]/90 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-white">
+                      Private
+                    </div>
+                  )}
 
                   {memory.photo_url && (
                     <div className="mb-5 max-h-[520px] overflow-hidden rounded-[1.5rem] bg-[#f7f1ea]">
@@ -507,6 +604,44 @@ export default function HomePage() {
               />
             </label>
 
+            <div className="mt-6">
+              <span className="text-sm font-semibold text-[#6e6258]">
+                Visibility
+              </span>
+
+              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  onClick={() => setVisibility("public")}
+                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                    visibility === "public"
+                      ? "border-[#9c7a4f] bg-[#f7efe7]"
+                      : "border-[#ded2c6] bg-white"
+                  }`}
+                  type="button"
+                >
+                  <p className="font-semibold text-[#2b251f]">Public</p>
+                  <p className="mt-1 text-sm text-[#7c7066]">
+                    Show this memory on the public wall.
+                  </p>
+                </button>
+
+                <button
+                  onClick={() => setVisibility("private")}
+                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                    visibility === "private"
+                      ? "border-[#9c7a4f] bg-[#f7efe7]"
+                      : "border-[#ded2c6] bg-white"
+                  }`}
+                  type="button"
+                >
+                  <p className="font-semibold text-[#2b251f]">Private</p>
+                  <p className="mt-1 text-sm text-[#7c7066]">
+                    Only people with the private code can view it.
+                  </p>
+                </button>
+              </div>
+            </div>
+
             <label className="mt-6 block">
               <span className="text-sm font-semibold text-[#6e6258]">
                 Photo
@@ -544,7 +679,8 @@ export default function HomePage() {
             </button>
 
             <p className="mt-4 text-center text-sm text-[#7c7066]">
-              Your photo and message will be publicly visible after submission.
+              Public memories will be visible to everyone. Private memories can
+              only be viewed after entering the private code.
             </p>
 
             {notice && (
@@ -593,8 +729,14 @@ export default function HomePage() {
           </p>
 
           <p className="mt-3">
-            By submitting a photo or message, you agree that it may be publicly
-            displayed on this website. If you would like your content removed,
+            Public memories are visible to everyone. Private memories are not
+            shown on the public wall unless the private access code is entered
+            on this device.
+          </p>
+
+          <p className="mt-3">
+            By submitting a photo or message, you confirm that you have
+            permission to share it. If you would like your content removed,
             please contact us on WhatsApp:
             <a
               href="https://wa.me/60173734059"
