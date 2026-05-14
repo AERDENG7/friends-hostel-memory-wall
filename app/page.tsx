@@ -12,14 +12,65 @@ type Memory = {
   created_at: string;
 };
 
+type MemoryComment = {
+  id: string;
+  memory_id: string;
+  name: string | null;
+  comment: string;
+  created_at: string;
+};
+
 export default function HomePage() {
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [comments, setComments] = useState<Record<string, MemoryComment[]>>(
+    {}
+  );
+
   const [name, setName] = useState("");
   const [country, setCountry] = useState("");
   const [message, setMessage] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
+
+  const [commentNames, setCommentNames] = useState<Record<string, string>>({});
+  const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
+  const [commentLoading, setCommentLoading] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [openCommentForms, setOpenCommentForms] = useState<
+    Record<string, boolean>
+  >({});
+
+  async function loadComments(memoryIds: string[]) {
+    if (memoryIds.length === 0) {
+      setComments({});
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("memory_comments")
+      .select("*")
+      .in("memory_id", memoryIds)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Load comments error:", error);
+      return;
+    }
+
+    const groupedComments: Record<string, MemoryComment[]> = {};
+
+    for (const comment of data || []) {
+      if (!groupedComments[comment.memory_id]) {
+        groupedComments[comment.memory_id] = [];
+      }
+
+      groupedComments[comment.memory_id].push(comment);
+    }
+
+    setComments(groupedComments);
+  }
 
   async function loadMemories() {
     const { data, error } = await supabase
@@ -33,7 +84,10 @@ export default function HomePage() {
       return;
     }
 
-    setMemories(data || []);
+    const loadedMemories = data || [];
+    setMemories(loadedMemories);
+
+    await loadComments(loadedMemories.map((memory) => memory.id));
   }
 
   useEffect(() => {
@@ -46,6 +100,21 @@ export default function HomePage() {
 
     if (!message.trim()) {
       setNotice("Please write a short message.");
+      return;
+    }
+
+    if (message.trim().length > 300) {
+      setNotice("Please keep your message under 300 characters.");
+      return;
+    }
+
+    if (name.trim().length > 40) {
+      setNotice("Please keep your name under 40 characters.");
+      return;
+    }
+
+    if (country.trim().length > 40) {
+      setNotice("Please keep your country under 40 characters.");
       return;
     }
 
@@ -96,16 +165,75 @@ export default function HomePage() {
       }
 
       setName("");
-setCountry("");
-setMessage("");
-setPhoto(null);
-await loadMemories();
-setNotice("Thank you. Your memory has been shared on the wall.");
+      setCountry("");
+      setMessage("");
+      setPhoto(null);
+
+      await loadMemories();
+
+      setNotice("Thank you. Your memory has been shared on the wall.");
     } catch (error) {
       console.error("Submit memory error:", error);
       setNotice("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCommentSubmit(memoryId: string) {
+    const commentName = commentNames[memoryId]?.trim() || "";
+    const commentText = commentTexts[memoryId]?.trim() || "";
+
+    if (!commentText) {
+      alert("Please write a comment.");
+      return;
+    }
+
+    if (commentText.length > 200) {
+      alert("Please keep your comment under 200 characters.");
+      return;
+    }
+
+    if (commentName.length > 40) {
+      alert("Please keep your name under 40 characters.");
+      return;
+    }
+
+    setCommentLoading((prev) => ({
+      ...prev,
+      [memoryId]: true,
+    }));
+
+    try {
+      const { error } = await supabase.from("memory_comments").insert({
+        memory_id: memoryId,
+        name: commentName || "Anonymous",
+        comment: commentText,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setCommentTexts((prev) => ({
+        ...prev,
+        [memoryId]: "",
+      }));
+
+      setOpenCommentForms((prev) => ({
+        ...prev,
+        [memoryId]: false,
+      }));
+
+      await loadComments(memories.map((memory) => memory.id));
+    } catch (error) {
+      console.error("Submit comment error:", error);
+      alert("Comment failed. Please try again.");
+    } finally {
+      setCommentLoading((prev) => ({
+        ...prev,
+        [memoryId]: false,
+      }));
     }
   }
 
@@ -155,7 +283,7 @@ setNotice("Thank you. Your memory has been shared on the wall.");
 
       {/* Memories */}
       <section id="memories" className="mx-auto max-w-7xl px-6 py-24">
-        <div className="mb-14 text-center">
+        <div className="mb-16 text-center">
           <p className="mb-3 text-sm tracking-[0.28em] uppercase text-[#9c7a4f]">
             Shared Moments
           </p>
@@ -171,42 +299,157 @@ setNotice("Thank you. Your memory has been shared on the wall.");
 
         {memories.length === 0 ? (
           <div className="rounded-[2rem] border border-[#eadfd5] bg-white/70 p-10 text-center text-[#6e6258]">
-            No approved memories yet. Be the first to share one.
+            No memories yet. Be the first to share one.
           </div>
         ) : (
-          <div className="columns-1 gap-6 md:columns-2 lg:columns-3">
-            {memories.map((memory) => (
-              <article
-                key={memory.id}
-                className="mb-6 break-inside-avoid rounded-[2rem] bg-white p-4 shadow-sm border border-[#eadfd5]"
-              >
-                {memory.photo_url && (
-                  <img
-                    src={memory.photo_url}
-                    alt={memory.message}
-                    className="mb-5 w-full rounded-[1.5rem] object-cover"
-                  />
-                )}
+          <div className="columns-1 gap-7 md:columns-2 lg:columns-3">
+            {memories.map((memory, index) => {
+              const rotateClass =
+                index % 3 === 0
+                  ? "rotate-[-0.8deg]"
+                  : index % 3 === 1
+                  ? "rotate-[0.6deg]"
+                  : "rotate-[0.2deg]";
 
-                <div className="px-2 pb-2">
-                  <p className="text-lg leading-relaxed text-[#2b251f]">
-                    “{memory.message}”
-                  </p>
+              return (
+                <article
+                  key={memory.id}
+                  className={`relative mb-9 break-inside-avoid rounded-[2rem] border border-[#eadfd5] bg-[#fffaf7] p-4 pt-8 shadow-[0_18px_50px_-28px_rgba(31,27,22,0.45)] transition duration-300 ${rotateClass} hover:rotate-0 hover:-translate-y-1 hover:shadow-[0_28px_70px_-32px_rgba(31,27,22,0.55)]`}
+                >
+                  {/* Rope and clips */}
+                  <div className="pointer-events-none absolute -top-3 left-7 right-7 h-8">
+                    <div className="absolute left-0 right-0 top-3 h-px bg-[#b99c7a]/60" />
 
-                  <div className="mt-5 border-t border-[#eee4da] pt-4">
-                    <p className="font-semibold">
-                      {memory.name || "Anonymous"}
+                    <div className="absolute left-8 top-0 h-6 w-4 rounded-b-full border border-[#b99c7a]/60 bg-[#f7f1ea] shadow-sm" />
+                    <div className="absolute right-8 top-0 h-6 w-4 rounded-b-full border border-[#b99c7a]/60 bg-[#f7f1ea] shadow-sm" />
+                  </div>
+
+                  {memory.photo_url && (
+                    <div className="mb-5 max-h-[520px] overflow-hidden rounded-[1.5rem] bg-[#f7f1ea]">
+                      <img
+                        src={memory.photo_url}
+                        alt={memory.message}
+                        className="w-full object-cover object-center"
+                      />
+                    </div>
+                  )}
+
+                  <div className="px-2 pb-2">
+                    <p className="text-lg leading-relaxed text-[#2b251f]">
+                      “{memory.message}”
                     </p>
 
-                    {memory.country && (
-                      <p className="text-sm text-[#7c7066]">
-                        {memory.country}
+                    <div className="mt-5 border-t border-[#eee4da] pt-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-[#9c7a4f]">
+                        Memory from
                       </p>
-                    )}
+
+                      <p className="mt-1 font-semibold">
+                        {memory.name || "Anonymous"}
+                      </p>
+
+                      {memory.country && (
+                        <p className="text-sm text-[#7c7066]">
+                          {memory.country}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Comments */}
+                    <div className="mt-5 border-t border-[#eee4da] pt-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-[#6e6258]">
+                          Comments
+                        </p>
+
+                        <span className="rounded-full bg-[#f7f1ea] px-3 py-1 text-xs font-semibold text-[#9c7a4f]">
+                          {(comments[memory.id] || []).length}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 space-y-3">
+                        {(comments[memory.id] || []).length === 0 ? (
+                          <p className="text-sm text-[#9a8d82]">
+                            No comments yet.
+                          </p>
+                        ) : (
+                          (comments[memory.id] || []).map((comment) => (
+                            <div
+                              key={comment.id}
+                              className="rounded-2xl bg-[#f7f1ea] px-4 py-3"
+                            >
+                              <p className="text-sm leading-relaxed text-[#2b251f]">
+                                {comment.comment}
+                              </p>
+
+                              <p className="mt-1 text-xs font-semibold text-[#8b7d70]">
+                                — {comment.name || "Anonymous"}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() =>
+                          setOpenCommentForms((prev) => ({
+                            ...prev,
+                            [memory.id]: !prev[memory.id],
+                          }))
+                        }
+                        className="mt-4 w-full rounded-full border border-[#ded2c6] bg-white/70 px-4 py-2 text-sm font-semibold text-[#6e6258] transition hover:border-[#9c7a4f] hover:text-[#1f1b16]"
+                        type="button"
+                      >
+                        {openCommentForms[memory.id]
+                          ? "Close comment form"
+                          : "Leave a comment"}
+                      </button>
+
+                      {openCommentForms[memory.id] && (
+                        <div className="mt-4 space-y-3 rounded-[1.5rem] bg-[#fbf7f2] p-3">
+                          <input
+                            value={commentNames[memory.id] || ""}
+                            onChange={(e) =>
+                              setCommentNames((prev) => ({
+                                ...prev,
+                                [memory.id]: e.target.value,
+                              }))
+                            }
+                            className="w-full rounded-2xl border border-[#ded2c6] bg-white px-4 py-2 text-sm outline-none focus:border-[#9c7a4f]"
+                            placeholder="Your name"
+                            type="text"
+                          />
+
+                          <textarea
+                            value={commentTexts[memory.id] || ""}
+                            onChange={(e) =>
+                              setCommentTexts((prev) => ({
+                                ...prev,
+                                [memory.id]: e.target.value,
+                              }))
+                            }
+                            className="w-full rounded-2xl border border-[#ded2c6] bg-white px-4 py-2 text-sm outline-none focus:border-[#9c7a4f]"
+                            placeholder="Leave a comment..."
+                            rows={2}
+                          />
+
+                          <button
+                            onClick={() => handleCommentSubmit(memory.id)}
+                            disabled={commentLoading[memory.id]}
+                            className="w-full rounded-full bg-[#1f1b16] px-4 py-2 text-sm font-semibold text-white hover:bg-[#8a642f] transition disabled:cursor-not-allowed disabled:opacity-50"
+                            type="button"
+                          >
+                            {commentLoading[memory.id]
+                              ? "Posting..."
+                              : "Post Comment"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
@@ -306,28 +549,57 @@ setNotice("Thank you. Your memory has been shared on the wall.");
         </div>
       </section>
 
-    <div className="mx-auto mt-8 max-w-3xl border-t border-[#ded2c6] pt-6 text-xs leading-relaxed text-[#8b7d70]">
-  <p className="font-semibold text-[#6e6258]">Community Notice</p>
+      {/* Footer */}
+      <footer className="px-6 py-12 text-center text-[#6e6258]">
+        <p className="font-semibold text-[#1f1b16]">Friends Hostel Astana</p>
 
-  <p className="mt-3">
-    This non-profit memory wall is created for Friends Hostel Astana to
-    preserve shared travel moments and community memories.
-  </p>
+        <p className="mt-2">
+          Memories shared by travelers from around the world.
+        </p>
 
-  <p className="mt-3">
-    By submitting a photo or message, you agree that it may be publicly
-    displayed on this website. If you would like your content removed, please
-    contact us on WhatsApp:
-    <a
-      href="https://wa.me/60173734059"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="ml-1 font-semibold text-[#6e6258] underline underline-offset-4 hover:text-[#1f1b16]"
-    >
-      +60 17 373 4059
-    </a>
-  </p>
-</div>
+        <div className="mt-6 flex flex-col items-center justify-center gap-3 text-sm sm:flex-row sm:gap-6">
+          <a
+            href="https://www.instagram.com/friends_hostel_astana/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#1f1b16] transition"
+          >
+            Instagram
+          </a>
+
+          <a
+            href="https://www.google.com/maps/search/Friends+Hostel+Astana"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#1f1b16] transition"
+          >
+            Location
+          </a>
+        </div>
+
+        <div className="mx-auto mt-8 max-w-3xl border-t border-[#ded2c6] pt-6 text-xs leading-relaxed text-[#8b7d70]">
+          <p className="font-semibold text-[#6e6258]">Community Notice</p>
+
+          <p className="mt-3">
+            This non-profit memory wall is created for Friends Hostel Astana to
+            preserve shared travel moments and community memories.
+          </p>
+
+          <p className="mt-3">
+            By submitting a photo or message, you agree that it may be publicly
+            displayed on this website. If you would like your content removed,
+            please contact us on WhatsApp:
+            <a
+              href="https://wa.me/60173734059"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-1 font-semibold text-[#6e6258] underline underline-offset-4 hover:text-[#1f1b16]"
+            >
+              +60 17 373 4059
+            </a>
+          </p>
+        </div>
+      </footer>
     </main>
   );
 }
