@@ -307,30 +307,22 @@ setNotice("Thank you. Your memory has been shared on the wall.");
       </section>
 
     <div className="mx-auto mt-8 max-w-3xl border-t border-[#ded2c6] pt-6 text-xs leading-relaxed text-[#8b7d70]">
-  <p className="font-semibold text-[#6e6258]">Community Notice / 社区声明</p>
+  <p className="font-semibold text-[#6e6258]">Community Notice</p>
 
   <p className="mt-3">
     This non-profit memory wall is created for Friends Hostel Astana to
     preserve shared travel moments and community memories.
   </p>
 
-  <p className="mt-2">
-    这个非盈利回忆墙是为 Friends Hostel Astana 创建的，用于保存旅行者共同的回忆和社区瞬间。
-  </p>
-
   <p className="mt-3">
     By submitting a photo or message, you agree that it may be publicly
     displayed on this website. If you would like your content removed, please
-    contact us on WhatsApp.
-  </p>
-
-  <p className="mt-2">
-    提交照片或留言即表示你同意内容可能会公开显示在本网站上。如需删除你的内容，请通过 WhatsApp 联系我们：
+    contact us on WhatsApp:
     <a
       href="https://wa.me/60173734059"
       target="_blank"
       rel="noopener noreferrer"
-      className="font-semibold text-[#6e6258] underline underline-offset-4 hover:text-[#1f1b16]"
+      className="ml-1 font-semibold text-[#6e6258] underline underline-offset-4 hover:text-[#1f1b16]"
     >
       +60 17 373 4059
     </a>
