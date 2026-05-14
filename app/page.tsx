@@ -32,6 +32,7 @@ export default function HomePage() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const [commentNames, setCommentNames] = useState<Record<string, string>>({});
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
@@ -168,6 +169,7 @@ export default function HomePage() {
       setCountry("");
       setMessage("");
       setPhoto(null);
+      setFileInputKey((prev) => prev + 1);
 
       await loadMemories();
 
@@ -311,6 +313,8 @@ export default function HomePage() {
                   ? "rotate-[0.6deg]"
                   : "rotate-[0.2deg]";
 
+              const memoryComments = comments[memory.id] || [];
+
               return (
                 <article
                   key={memory.id}
@@ -335,78 +339,65 @@ export default function HomePage() {
                   )}
 
                   <div className="px-2 pb-2">
-                    <p className="text-lg leading-relaxed text-[#2b251f]">
-                      “{memory.message}”
-                    </p>
-
-                    <div className="mt-5 border-t border-[#eee4da] pt-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-[#9c7a4f]">
-                        Memory from
-                      </p>
-
-                      <p className="mt-1 font-semibold">
-                        {memory.name || "Anonymous"}
+                    <div className="border-b border-[#eee4da] pb-5">
+                      <p className="font-serif text-[1.05rem] leading-relaxed text-[#2b251f]">
+                        “{memory.message}”
+                        <span className="ml-2 whitespace-nowrap font-sans text-sm font-bold text-[#5f5145]">
+                          — {memory.name || "Anonymous"}
+                        </span>
                       </p>
 
                       {memory.country && (
-                        <p className="text-sm text-[#7c7066]">
+                        <p className="mt-2 text-xs font-medium text-[#9a8d82]">
                           {memory.country}
                         </p>
                       )}
                     </div>
 
                     {/* Comments */}
-                    <div className="mt-5 border-t border-[#eee4da] pt-4">
+                    <div className="pt-4">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-[#6e6258]">
-                          Comments
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#8b7d70]">
+                          Comments {memoryComments.length}
                         </p>
 
-                        <span className="rounded-full bg-[#f7f1ea] px-3 py-1 text-xs font-semibold text-[#9c7a4f]">
-                          {(comments[memory.id] || []).length}
-                        </span>
+                        <button
+                          onClick={() =>
+                            setOpenCommentForms((prev) => ({
+                              ...prev,
+                              [memory.id]: !prev[memory.id],
+                            }))
+                          }
+                          className="rounded-full border border-[#ded2c6] bg-white/70 px-3 py-1 text-xs font-bold text-[#6e6258] transition hover:border-[#9c7a4f] hover:text-[#1f1b16]"
+                          type="button"
+                        >
+                          {openCommentForms[memory.id]
+                            ? "Close"
+                            : "Leave a comment"}
+                        </button>
                       </div>
 
-                      <div className="mt-3 space-y-3">
-                        {(comments[memory.id] || []).length === 0 ? (
-                          <p className="text-sm text-[#9a8d82]">
-                            No comments yet.
-                          </p>
-                        ) : (
-                          (comments[memory.id] || []).map((comment) => (
+                      {memoryComments.length > 0 && (
+                        <div className="mt-3 space-y-3">
+                          {memoryComments.map((comment) => (
                             <div
                               key={comment.id}
                               className="rounded-2xl bg-[#f7f1ea] px-4 py-3"
                             >
-                              <p className="text-sm leading-relaxed text-[#2b251f]">
+                              <p className="font-serif text-sm leading-relaxed text-[#2b251f]">
                                 {comment.comment}
                               </p>
 
-                              <p className="mt-1 text-xs font-semibold text-[#8b7d70]">
+                              <p className="mt-1 text-xs font-bold text-[#8b7d70]">
                                 — {comment.name || "Anonymous"}
                               </p>
                             </div>
-                          ))
-                        )}
-                      </div>
-
-                      <button
-                        onClick={() =>
-                          setOpenCommentForms((prev) => ({
-                            ...prev,
-                            [memory.id]: !prev[memory.id],
-                          }))
-                        }
-                        className="mt-4 w-full rounded-full border border-[#ded2c6] bg-white/70 px-4 py-2 text-sm font-semibold text-[#6e6258] transition hover:border-[#9c7a4f] hover:text-[#1f1b16]"
-                        type="button"
-                      >
-                        {openCommentForms[memory.id]
-                          ? "Close comment form"
-                          : "Leave a comment"}
-                      </button>
+                          ))}
+                        </div>
+                      )}
 
                       {openCommentForms[memory.id] && (
-                        <div className="mt-4 space-y-3 rounded-[1.5rem] bg-[#fbf7f2] p-3">
+                        <div className="mt-3 space-y-2 rounded-[1.25rem] bg-[#fbf7f2] p-3">
                           <input
                             value={commentNames[memory.id] || ""}
                             onChange={(e) =>
@@ -415,7 +406,7 @@ export default function HomePage() {
                                 [memory.id]: e.target.value,
                               }))
                             }
-                            className="w-full rounded-2xl border border-[#ded2c6] bg-white px-4 py-2 text-sm outline-none focus:border-[#9c7a4f]"
+                            className="w-full rounded-xl border border-[#ded2c6] bg-white px-3 py-2 text-xs outline-none focus:border-[#9c7a4f]"
                             placeholder="Your name"
                             type="text"
                           />
@@ -428,7 +419,7 @@ export default function HomePage() {
                                 [memory.id]: e.target.value,
                               }))
                             }
-                            className="w-full rounded-2xl border border-[#ded2c6] bg-white px-4 py-2 text-sm outline-none focus:border-[#9c7a4f]"
+                            className="w-full rounded-xl border border-[#ded2c6] bg-white px-3 py-2 text-xs outline-none focus:border-[#9c7a4f]"
                             placeholder="Leave a comment..."
                             rows={2}
                           />
@@ -436,7 +427,7 @@ export default function HomePage() {
                           <button
                             onClick={() => handleCommentSubmit(memory.id)}
                             disabled={commentLoading[memory.id]}
-                            className="w-full rounded-full bg-[#1f1b16] px-4 py-2 text-sm font-semibold text-white hover:bg-[#8a642f] transition disabled:cursor-not-allowed disabled:opacity-50"
+                            className="w-full rounded-full bg-[#1f1b16] px-4 py-2 text-xs font-semibold text-white hover:bg-[#8a642f] transition disabled:cursor-not-allowed disabled:opacity-50"
                             type="button"
                           >
                             {commentLoading[memory.id]
@@ -520,12 +511,28 @@ export default function HomePage() {
               <span className="text-sm font-semibold text-[#6e6258]">
                 Photo
               </span>
-              <input
-                onChange={(e) => setPhoto(e.target.files?.[0] || null)}
-                className="mt-2 w-full rounded-2xl border border-dashed border-[#cbbbaa] bg-white px-4 py-4"
-                type="file"
-                accept="image/*"
-              />
+
+              <div className="mt-2 rounded-2xl border border-dashed border-[#cbbbaa] bg-white px-4 py-4">
+                <input
+                  key={fileInputKey}
+                  id="memory-photo"
+                  onChange={(e) => setPhoto(e.target.files?.[0] || null)}
+                  className="hidden"
+                  type="file"
+                  accept="image/*"
+                />
+
+                <label
+                  htmlFor="memory-photo"
+                  className="inline-flex cursor-pointer rounded-full bg-[#1f1b16] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#8a642f]"
+                >
+                  Choose Photo
+                </label>
+
+                <span className="ml-3 text-sm text-[#7c7066]">
+                  {photo ? photo.name : "No photo selected"}
+                </span>
+              </div>
             </label>
 
             <button
